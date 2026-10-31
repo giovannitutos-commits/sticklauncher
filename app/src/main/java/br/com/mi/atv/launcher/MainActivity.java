@@ -234,10 +234,66 @@ public class MainActivity extends Activity {
     }
     private int appColor(String pkg) {if(pkg.contains("nuvio"))return 0xff6128a8;if(pkg.contains("youtube"))return 0xffa21823;if(pkg.contains("netflix"))return 0xff160e16;if(pkg.contains("amazon"))return 0xff096fbb;if(pkg.contains("disney"))return 0xff152657;if(pkg.contains("spotify"))return 0xff103c2a;return 0xff263e55;}
     private View appTile(App a) {
-        FrameLayout card=new FrameLayout(this);card.setBackground(panel(appColor(a.pkg),12,0x336a7b91));card.setClipToOutline(true);
+        FrameLayout card=new FrameLayout(this) {
+            private boolean pressing, held;
+            private int pressedCode;
+            private final Runnable hold = () -> {
+                if (pressing && hasFocus() && isAttachedToWindow()) {
+                    held=true;
+                    performLongClick();
+                }
+            };
+            @Override public boolean dispatchKeyEvent(KeyEvent event) {
+                int code=event.getKeyCode();
+                if(code!=KeyEvent.KEYCODE_DPAD_CENTER && code!=KeyEvent.KEYCODE_ENTER
+                        && code!=KeyEvent.KEYCODE_NUMPAD_ENTER && code!=KeyEvent.KEYCODE_BUTTON_A)
+                    return super.dispatchKeyEvent(event);
+                if(event.getAction()==KeyEvent.ACTION_DOWN) {
+                    if(!pressing && event.getRepeatCount()==0) {
+                        pressing=true;held=false;pressedCode=code;
+                        setPressed(true);handler.postDelayed(hold,600);
+                    }
+                    return true;
+                }
+                if(event.getAction()==KeyEvent.ACTION_UP) {
+                    boolean click=pressing && code==pressedCode && !held && !event.isCanceled() && hasFocus();
+                    cancelPress();
+                    if(click)performClick();
+                    return true;
+                }
+                return true;
+            }
+            private void cancelPress() {
+                pressing=false;setPressed(false);handler.removeCallbacks(hold);
+            }
+            @Override protected void onFocusChanged(boolean gain,int direction,android.graphics.Rect previous) {
+                super.onFocusChanged(gain,direction,previous);
+                if(!gain)cancelPress();
+            }
+            @Override protected void onDetachedFromWindow() {
+                cancelPress();super.onDetachedFromWindow();
+            }
+        };card.setBackground(panel(appColor(a.pkg),12,0x336a7b91));card.setClipToOutline(true);
         if(a.banner!=null) {ImageView image=new ImageView(this);image.setImageDrawable(a.banner);image.setScaleType(ImageView.ScaleType.FIT_XY);card.addView(image,new FrameLayout.LayoutParams(-1,-1));}
         else {ImageView icon=new ImageView(this);icon.setImageDrawable(a.icon);place(card,icon,49,9,34,34);TextView label=text(a.name,12,Color.WHITE);label.setSingleLine();label.setEllipsize(TextUtils.TruncateAt.END);label.setGravity(Gravity.CENTER);place(card,label,5,47,122,23);}
-        card.setContentDescription(a.name+(pinned.contains(a.pkg)?", fixado":""));focus(card,"app:"+a.pkg,12,false);card.setOnClickListener(v->launchApp(a.pkg));card.setOnLongClickListener(v->{togglePin(a.pkg);return true;});return card;
+        card.setContentDescription(a.name+(pinned.contains(a.pkg)?", fixado":""));focus(card,"app:"+a.pkg,12,false);card.setOnClickListener(v->launchApp(a.pkg));card.setOnLongClickListener(v->{appOptions(a);return true;});return card;
+    }
+    private void appOptions(App app) {
+        if(!pinned.contains(app.pkg)) {
+            new AlertDialog.Builder(this).setTitle(app.name)
+                .setItems(new String[]{"Adicionar à dock"},(d,i)->togglePin(app.pkg))
+                .setNegativeButton("Cancelar",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle(app.name)
+            .setItems(new String[]{"Mover à esquerda","Mover à direita","Remover da dock"},(d,choice)-> {
+                int at=pinned.indexOf(app.pkg);
+                if(at<0)return;
+                if(choice==0 && at>0)Collections.swap(pinned,at,at-1);
+                if(choice==1 && at<pinned.size()-1)Collections.swap(pinned,at,at+1);
+                if(choice==2)pinned.remove(app.pkg);
+                savePinned();render();updateWeather(false);
+            }).setNegativeButton("Cancelar",null).show();
     }
     private void togglePin(String pkg) {
         if(!pinned.remove(pkg))pinned.add(pkg);savePinned();render();updateWeather(false);
