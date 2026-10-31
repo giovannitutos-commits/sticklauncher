@@ -3,20 +3,47 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mistick-build-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v3
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.5"
-      - run: gradle assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+          gradle-version: '8.9'
+      - name: SDK Android
+        run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: mistick-signing-v1
+      - name: Recuperar assinatura persistente
+        env:
+          SIGNING_KEY: ${{ secrets.MISTICK_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$SIGNING_KEY" | base64 --decode > "$HOME/.android/debug.keystore"
+          else
+            echo '::warning::Usando chave debug em cache. Configure MISTICK_KEYSTORE_B64 para preservar a assinatura mesmo se o cache expirar.'
+          fi
+      - name: Compilar e verificar
+        run: gradle :app:assembleRelease :app:lintRelease --no-daemon --stacktrace
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
         with:
           name: launcher-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
