@@ -26,7 +26,11 @@ public class MainActivity extends Activity {
     };
     android.content.SharedPreferences prefs;
     LinearLayout body, dock, nextRow, appsRow;
-    TextView weather, clock, nextHint;
+    TextView weather, clock, nextHint, weatherCity, weatherDetails, weatherStamp;
+    LinearLayout weatherHero;
+    WeatherGlyph weatherGlyph;
+    Bitmap scene, frostedScene;
+    int screenWidth, screenHeight;
     ScrollView scroll;
     final ArrayList<App> apps = new ArrayList<>();
     boolean resumed, weatherLoading;
@@ -35,7 +39,7 @@ public class MainActivity extends Activity {
     static class App {
         String name, pkg;
         Intent intent;
-        Drawable icon;
+        Drawable icon, banner;
     }
     static class Program {
         String title, description, art, intent, pkg;
@@ -54,37 +58,82 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("aurora", MODE_PRIVATE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         immersive();
+        screenWidth = getResources().getDisplayMetrics().widthPixels;
+        screenHeight = getResources().getDisplayMetrics().heightPixels;
+        makeScene();
         FrameLayout root = new FrameLayout(this);
-        root.addView(new AuroraBackground(this), new FrameLayout.LayoutParams(-1,-1));
+        ImageView wallpaper = new ImageView(this);
+        wallpaper.setImageBitmap(scene); wallpaper.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        root.addView(wallpaper, new FrameLayout.LayoutParams(-1,-1));
         scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setClipToPadding(false);
-        scroll.setPadding(dp(42),dp(24),dp(42),dp(28));
+        scroll.setVerticalScrollBarEnabled(false); scroll.setBackgroundColor(Color.TRANSPARENT);
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
+        body.setClipChildren(false); body.setClipToPadding(false);
         scroll.addView(body); root.addView(scroll); setContentView(root);
-        LinearLayout top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL);
-        weather = text("Escolher cidade  ›", 17, WHITE); weather.setPadding(dp(16),dp(10),dp(16),dp(10));
-        focusable(weather, () -> chooseCity());
-        top.addView(weather, new LinearLayout.LayoutParams(0,dp(66),1));
-        clock = text("", 23, WHITE); clock.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        top.addView(clock, new LinearLayout.LayoutParams(dp(160),dp(66)));
-        body.addView(top);
-        TextView welcome = text("Seu próximo momento.", 32, WHITE);
-        welcome.setPadding(0,dp(34),0,0); body.addView(welcome);
-        TextView subtitle = text("Tudo o que você gosta, no seu lugar.", 14, MUTED);
-        subtitle.setPadding(0,dp(4),0,dp(24)); body.addView(subtitle);
-        section("Favoritos", "Segure OK para organizar");
-        dock = row(); body.addView(scroller(dock));
-        section("Continuar assistindo", "");
-        nextRow = row(); body.addView(scroller(nextRow));
-        nextHint = text("Buscando conteúdos compartilhados pelos aplicativos…", 13, MUTED);
-        nextHint.setPadding(0,dp(8),0,0); body.addView(nextHint);
-        section("Seus aplicativos", "");
-        appsRow = row(); body.addView(scroller(appsRow));
-        LinearLayout controls = row(); controls.setPadding(0,dp(18),0,dp(8));
-        controls.addView(button("Clima e cidade", this::chooseCity));
-        controls.addView(button("Configurações da TV", () -> open(new Intent(Settings.ACTION_SETTINGS))));
-        controls.addView(button("Ajuda", this::help));
-        body.addView(controls);
-        clock.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date()));
+
+        int heroHeight = Math.max(dp(400),screenHeight-dp(38));
+        FrameLayout hero = new FrameLayout(this); hero.setClipChildren(false); hero.setClipToPadding(false);
+        body.addView(hero,new LinearLayout.LayoutParams(-1,heroHeight));
+
+        weatherHero = new LinearLayout(this); weatherHero.setOrientation(LinearLayout.VERTICAL);
+        weatherHero.setPadding(dp(18),dp(12),dp(18),dp(14));
+        weatherCity = text("Seu clima",21,WHITE);
+        weatherCity.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        weatherHero.addView(weatherCity);
+        LinearLayout temperatureLine = new LinearLayout(this); temperatureLine.setGravity(Gravity.CENTER_VERTICAL);
+        weather = text("—°",74,WHITE); weather.setTypeface(Typeface.create("sans-serif-light",Typeface.NORMAL));
+        weather.setIncludeFontPadding(false);
+        temperatureLine.addView(weather,new LinearLayout.LayoutParams(-2,dp(90)));
+        weatherGlyph = new WeatherGlyph(this);
+        LinearLayout.LayoutParams glyphParams=new LinearLayout.LayoutParams(dp(76),dp(76)); glyphParams.leftMargin=dp(16);
+        temperatureLine.addView(weatherGlyph,glyphParams); weatherHero.addView(temperatureLine);
+        weatherDetails = text("Escolha sua cidade",16,WHITE); weatherHero.addView(weatherDetails);
+        weatherStamp = text("OK para configurar  ·  Open-Meteo",10,0xCCFFFFFF);
+        weatherStamp.setPadding(0,dp(9),0,0); weatherHero.addView(weatherStamp);
+        FrameLayout.LayoutParams weatherParams=new FrameLayout.LayoutParams(dp(470),-2,Gravity.TOP|Gravity.LEFT);
+        weatherParams.setMargins(dp(30),dp(20),0,0); hero.addView(weatherHero,weatherParams);
+        weatherHero.setFocusable(true); weatherHero.setClickable(true); weatherHero.setOnClickListener(v->chooseCity());
+        weatherHero.setOnFocusChangeListener((v,focus)->{
+            v.setBackground(focus ? new GlassBackground(v,true,22) : null);
+        });
+
+        LinearLayout topRight = new LinearLayout(this); topRight.setGravity(Gravity.CENTER_VERTICAL);
+        clock=text("",20,WHITE); clock.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        clock.setPadding(dp(12),dp(12),dp(16),dp(12)); topRight.addView(clock);
+        TextView settings=button("⚙",()->open(new Intent(Settings.ACTION_SETTINGS)));
+        settings.setTextSize(22); topRight.addView(settings);
+        FrameLayout.LayoutParams clockParams=new FrameLayout.LayoutParams(-2,dp(56),Gravity.TOP|Gravity.RIGHT);
+        clockParams.setMargins(0,dp(24),dp(30),0); hero.addView(topRight,clockParams);
+
+        TextView hint=text("SEUS FAVORITOS",10,0xCCFFFFFF);
+        hint.setLetterSpacing(.18f);
+        FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.LEFT);
+        hintParams.setMargins(dp(46),0,0,dp(142)); hero.addView(hint,hintParams);
+        FrameLayout dockSurface=new FrameLayout(this); dockSurface.setClipChildren(false); dockSurface.setClipToPadding(false);
+        dockSurface.setBackground(new GlassBackground(dockSurface,false,28));
+        dockSurface.setPadding(dp(8),dp(5),dp(8),dp(5));
+        dock=row(); dock.setPadding(dp(10),dp(10),dp(10),dp(10));
+        dockSurface.addView(scroller(dock),new FrameLayout.LayoutParams(-1,-1));
+        FrameLayout.LayoutParams dockParams=new FrameLayout.LayoutParams(-1,dp(125),Gravity.BOTTOM);
+        dockParams.setMargins(dp(38),0,dp(38),dp(10)); hero.addView(dockSurface,dockParams);
+
+        LinearLayout content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(42),0,dp(42),dp(30)); content.setBackground(new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00101C29,0xD9091725,0xF5081521}));
+        body.addView(content);
+        LinearLayout pageBody=body; body=content;
+        section("Continuar assistindo", "Seus próximos episódios");
+        nextRow=row(); body.addView(scroller(nextRow));
+        nextHint=text("Buscando conteúdos compartilhados pelos aplicativos…",12,MUTED);
+        nextHint.setPadding(dp(4),dp(4),dp(4),dp(10)); body.addView(nextHint);
+        section("Todos os aplicativos","Segure OK para editar o dock");
+        appsRow=row(); body.addView(scroller(appsRow));
+        LinearLayout controls=row(); controls.setPadding(0,dp(18),0,dp(8));
+        controls.addView(button("Clima e cidade",this::chooseCity));
+        controls.addView(button("Organizar favoritos",this::addFavorite));
+        controls.addView(button("Ajuda",this::help)); body.addView(controls);
+        body=pageBody;
+        clock.setText(new SimpleDateFormat("HH:mm",Locale.getDefault()).format(new Date()));
     }
     @Override protected void onResume() {
         super.onResume(); resumed = true; immersive(); loadApps(); loadPrograms();
@@ -109,10 +158,10 @@ public class MainActivity extends Activity {
     }
     void immersive() { getWindow().getDecorView().setSystemUiVisibility(5894); }
     @Override public void onWindowFocusChanged(boolean hasFocus) { super.onWindowFocusChanged(hasFocus); if (hasFocus) immersive(); }
-    @Override public void onBackPressed() { scroll.smoothScrollTo(0,0); weather.requestFocus(); }
+    @Override public void onBackPressed() { scroll.smoothScrollTo(0,0); if (dock.getChildCount()>0) dock.getChildAt(0).requestFocus(); }
     TextView text(String value, float size, int color) {
         TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color);
-        v.setFontFeatureSettings("kern"); return v;
+        v.setFontFeatureSettings("kern"); v.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL)); return v;
     }
     GradientDrawable panel(boolean focused) {
         GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
@@ -120,10 +169,10 @@ public class MainActivity extends Activity {
         d.setCornerRadius(dp(17)); d.setStroke(dp(focused ? 2 : 1), focused ? 0xFFADF8E9 : 0x30FFFFFF); return d;
     }
     void focusable(View v, Runnable click) {
-        v.setFocusable(true); v.setClickable(true); v.setBackground(panel(false));
+        v.setFocusable(true); v.setClickable(true); v.setBackground(new GlassBackground(v,false,17));
         v.setOnClickListener(w -> click.run());
         v.setOnFocusChangeListener((w, f) -> {
-            w.setBackground(panel(f)); w.setElevation(dp(f ? 12 : 2));
+            w.setBackground(new GlassBackground(w,f,17)); w.setElevation(dp(f ? 12 : 2));
             w.animate().scaleX(f ? 1.035f : 1f).scaleY(f ? 1.035f : 1f).setDuration(140).start();
         });
     }
@@ -160,6 +209,7 @@ public class MainActivity extends Activity {
         for (ResolveInfo ri : found.values()) {
             App a = new App(); a.pkg = ri.activityInfo.packageName;
             a.name = ri.loadLabel(pm).toString(); a.icon = ri.loadIcon(pm);
+            try { a.banner=pm.getApplicationBanner(a.pkg); } catch(Exception ignored) {}
             a.intent = new Intent(Intent.ACTION_MAIN).setComponent(new ComponentName(a.pkg,ri.activityInfo.name))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             apps.add(a);
@@ -182,20 +232,77 @@ public class MainActivity extends Activity {
     void renderApps() {
         dock.removeAllViews(); appsRow.removeAllViews();
         for (String pkg : favorites()) for (App a : apps) if (a.pkg.equals(pkg)) dock.addView(appCard(a));
-        dock.addView(button("+  Favoritos", this::addFavorite));
+        TextView plus=button("+",this::addFavorite); plus.setTextSize(30);
+        LinearLayout.LayoutParams plusParams=new LinearLayout.LayoutParams(dp(65),dp(94)); plusParams.setMargins(dp(2),0,dp(4),0); plus.setLayoutParams(plusParams); dock.addView(plus);
         for (App a : apps) appsRow.addView(appCard(a));
     }
+    class AppTile extends LinearLayout {
+        boolean holding, held; int pressedCode;
+        final Runnable longPress=()->{ if(holding && hasFocus() && isAttachedToWindow()) { held=true; performLongClick(); } };
+        AppTile() { super(MainActivity.this); }
+        void cancelHold() { holding=false; setPressed(false); ui.removeCallbacks(longPress); }
+        @Override public boolean dispatchKeyEvent(KeyEvent event) {
+            int code=event.getKeyCode();
+            if(code!=KeyEvent.KEYCODE_DPAD_CENTER && code!=KeyEvent.KEYCODE_ENTER &&
+               code!=KeyEvent.KEYCODE_NUMPAD_ENTER && code!=KeyEvent.KEYCODE_BUTTON_A) return super.dispatchKeyEvent(event);
+            if(event.getAction()==KeyEvent.ACTION_DOWN) {
+                if(!holding && event.getRepeatCount()==0) {
+                    holding=true; held=false; pressedCode=code; setPressed(true); ui.postDelayed(longPress,600);
+                }
+                return true;
+            }
+            if(event.getAction()==KeyEvent.ACTION_UP) {
+                boolean click=holding && !held && code==pressedCode && !event.isCanceled() && hasFocus();
+                cancelHold(); if(click)performClick(); return true;
+            }
+            return true;
+        }
+        @Override protected void onFocusChanged(boolean focus,int direction,Rect previous) {
+            super.onFocusChanged(focus,direction,previous); if(!focus)cancelHold();
+        }
+        @Override protected void onDetachedFromWindow() { cancelHold(); super.onDetachedFromWindow(); }
+    }
     View appCard(App a) {
-        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER);
-        card.setPadding(dp(8),dp(13),dp(8),dp(8));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(126),dp(104)); p.setMargins(0,0,dp(16),0); card.setLayoutParams(p);
-        ImageView icon = new ImageView(this); icon.setImageDrawable(a.icon); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        card.addView(icon,new LinearLayout.LayoutParams(dp(49),dp(49)));
-        TextView title = text(a.name,12,WHITE); title.setGravity(Gravity.CENTER); title.setMaxLines(2);
-        card.addView(title,new LinearLayout.LayoutParams(-1,0,1));
-        focusable(card, () -> open(a.intent));
-        card.setOnLongClickListener(v -> { editFavorite(a); return true; });
+        AppTile card=new AppTile(); card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER);
+        card.setPadding(dp(4),dp(5),dp(4),dp(3));
+        int tileWidth=Math.min(dp(138),Math.max(dp(110),(screenWidth-dp(120))/6));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(tileWidth,dp(94));
+        p.setMargins(0,0,dp(10),0); card.setLayoutParams(p);
+        FrameLayout picture=new FrameLayout(this);
+        GradientDrawable color=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{appTint(a.pkg),0xFF172538});
+        color.setCornerRadius(dp(13)); picture.setBackground(color); picture.setClipToOutline(true);
+        ImageView icon=new ImageView(this);
+        if(a.banner!=null) {
+            icon.setImageDrawable(a.banner); icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            picture.addView(icon,new FrameLayout.LayoutParams(-1,-1));
+        } else {
+            icon.setImageDrawable(a.icon); icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            picture.addView(icon,new FrameLayout.LayoutParams(dp(46),dp(46),Gravity.CENTER));
+        }
+        card.addView(picture,new LinearLayout.LayoutParams(-1,dp(64)));
+        TextView title=text(a.name,11,WHITE); title.setGravity(Gravity.CENTER); title.setSingleLine();
+        title.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE); title.setMarqueeRepeatLimit(-1);
+        card.addView(title,new LinearLayout.LayoutParams(-1,dp(21)));
+        card.setContentDescription(a.name+", segure OK para organizar");
+        card.setFocusable(true); card.setClickable(true);
+        card.setOnClickListener(v->open(a.intent));
+        card.setOnFocusChangeListener((v,focused)->{
+            title.setSelected(focused);
+            v.setBackground(focused ? new GlassBackground(v,true,18) : null);
+            v.setElevation(dp(focused?12:0));
+            v.animate().scaleX(focused?1.055f:1).scaleY(focused?1.055f:1).setDuration(150).start();
+        });
+        card.setOnLongClickListener(v->{editFavorite(a);return true;});
         return card;
+    }
+    int appTint(String pkg) {
+        String p=pkg.toLowerCase(Locale.ROOT);
+        if(p.contains("youtube"))return 0xFFD52235;
+        if(p.contains("nuvio"))return 0xFF6E39B6;
+        if(p.contains("netflix"))return 0xFF802633;
+        if(p.contains("amazon"))return 0xFF137CB8;
+        if(p.contains("spotify"))return 0xFF219F72;
+        return 0xFF36566C;
     }
     void addFavorite() {
         if (apps.isEmpty()) { toast("Nenhum aplicativo encontrado."); return; }
@@ -349,7 +456,7 @@ public class MainActivity extends Activity {
                         new AlertDialog.Builder(this).setTitle("Selecione sua cidade").setItems(labels,(d2,index) -> {
                             try {
                                 JSONObject city=results.getJSONObject(index);
-                                prefs.edit().putString("city",city.getString("name")).putString("lat",city.getString("latitude")).putString("lon",city.getString("longitude")).remove("weather").apply();
+                                prefs.edit().putString("city",city.getString("name")).putString("lat",city.getString("latitude")).putString("lon",city.getString("longitude")).remove("weather").remove("weatherGlass").apply();
                                 refreshWeather();
                             } catch(Exception e) { toast("Não foi possível selecionar a cidade."); }
                         }).setNegativeButton("Voltar",null).show();
@@ -358,30 +465,46 @@ public class MainActivity extends Activity {
             });
         })); dialog.show();
     }
+    void showWeather(String city, JSONObject data, boolean offline) {
+        weatherCity.setText(city.isEmpty() ? "Seu clima" : city);
+        if(data==null) {
+            weather.setText("—°"); weatherDetails.setText(city.isEmpty() ? "Escolha sua cidade" : "Clima indisponível");
+            weatherStamp.setText("OK para configurar · Open-Meteo"); return;
+        }
+        weather.setText(Math.round(data.optDouble("temperature"))+"°");
+        int code=data.optInt("code"); weatherGlyph.code=code; weatherGlyph.invalidate();
+        weatherDetails.setText(condition(code)+"   ↑"+Math.round(data.optDouble("max"))+"°  ↓"+Math.round(data.optDouble("min"))+"°");
+        weatherStamp.setText((offline ? "Sem conexão · " : "")+weatherAge()+" · OK para alterar");
+    }
     void refreshWeather() {
         String city=prefs.getString("city","");
-        if(city.isEmpty()) { weather.setText("Escolher cidade  ›"); return; }
-        String old=prefs.getString("weather","");
-        weather.setText(old.isEmpty() ? city+" · Atualizando…" : old+"\n"+weatherAge());
-        if(weatherLoading || io.isShutdown())return; weatherLoading=true;
-        final String lat=prefs.getString("lat",""), lon=prefs.getString("lon","");
-        io.execute(() -> {
+        JSONObject cached=null;
+        try { cached=new JSONObject(prefs.getString("weatherGlass","")); } catch(Exception ignored) {}
+        showWeather(city,cached,false);
+        if(city.isEmpty() || weatherLoading || io.isShutdown())return;
+        weatherLoading=true;
+        final JSONObject old=cached;
+        final String lat=prefs.getString("lat",""),lon=prefs.getString("lon","");
+        io.execute(()->{
             try {
-                JSONObject data=json("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1");
-                JSONObject current=data.getJSONObject("current"), daily=data.getJSONObject("daily");
-                String display=city+"   "+Math.round(current.getDouble("temperature_2m"))+"°   "+condition(current.getInt("weather_code"))
-                    +"   ↑"+Math.round(daily.getJSONArray("temperature_2m_max").getDouble(0))+"° ↓"+Math.round(daily.getJSONArray("temperature_2m_min").getDouble(0))+"°";
-                ui.post(() -> {
+                JSONObject response=json("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1");
+                JSONObject current=response.getJSONObject("current"), daily=response.getJSONObject("daily");
+                JSONObject data=new JSONObject().put("temperature",current.getDouble("temperature_2m"))
+                    .put("code",current.getInt("weather_code")).put("max",daily.getJSONArray("temperature_2m_max").getDouble(0))
+                    .put("min",daily.getJSONArray("temperature_2m_min").getDouble(0));
+                ui.post(()->{
                     weatherLoading=false; if(isDestroyed())return;
-                    if(!lat.equals(prefs.getString("lat","")) || !lon.equals(prefs.getString("lon",""))) { refreshWeather(); return; }
-                    prefs.edit().putString("weather",display).putLong("weatherTime",System.currentTimeMillis()).apply();
-                    weather.setText(display+"\n"+weatherAge());
+                    if(!lat.equals(prefs.getString("lat","")) || !lon.equals(prefs.getString("lon",""))) {refreshWeather();return;}
+                    prefs.edit().putString("weatherGlass",data.toString()).putLong("weatherTime",System.currentTimeMillis()).apply();
+                    showWeather(city,data,false);
                 });
-            } catch(Exception e) { ui.post(() -> {
-                weatherLoading=false; if(isDestroyed())return;
-                if(!lat.equals(prefs.getString("lat","")) || !lon.equals(prefs.getString("lon",""))) { refreshWeather(); return; }
-                weather.setText(old.isEmpty() ? city+" · Clima indisponível" : old+"\nSem conexão · "+weatherAge());
-            }); }
+            } catch(Exception e) {
+                ui.post(()->{
+                    weatherLoading=false; if(isDestroyed())return;
+                    if(!lat.equals(prefs.getString("lat","")) || !lon.equals(prefs.getString("lon",""))) {refreshWeather();return;}
+                    showWeather(city,old,true);
+                });
+            }
         });
     }
     String weatherAge() {
@@ -401,16 +524,100 @@ public class MainActivity extends Activity {
             "Para usar como início, pressione HOME e selecione Aurora TV, se a sua TV permitir.\n\n"+
             "Clima: Open-Meteo (CC BY 4.0). Dados geográficos: GeoNames.").setPositiveButton("Entendi",null).show();
     }
-    class AuroraBackground extends View {
-        final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        AuroraBackground(Context c) { super(c); }
+    void makeScene() {
+        int w=Math.min(screenWidth,1920),h=Math.max(1,Math.round((float)screenHeight*w/screenWidth));
+        scene=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+        Canvas canvas=new Canvas(scene); Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new LinearGradient(0,0,w,h,new int[]{0xFF385967,0xFF789298,0xFFDBC5A5,0xFF203D4E},new float[]{0,.35f,.65f,1},Shader.TileMode.CLAMP));
+        canvas.drawRect(0,0,w,h,p);
+        p.setShader(new RadialGradient(w*.72f,h*.28f,w*.48f,new int[]{0xA8FFF0CE,0x00FFF0CE},null,Shader.TileMode.CLAMP));
+        canvas.drawRect(0,0,w,h,p);
+        for(int layer=0;layer<5;layer++) {
+            Path path=new Path(); float base=h*(.51f+layer*.095f);
+            path.moveTo(-w*.1f,h); path.lineTo(-w*.1f,base);
+            for(int i=0;i<=12;i++) {
+                float x=w*(i/11f);
+                float y=base-(float)(Math.sin(i*.83+layer*1.2)*.5+.5)*h*(.11f+layer*.017f);
+                path.lineTo(x,y);
+            }
+            path.lineTo(w*1.1f,h); path.close();
+            p.setShader(null);
+            int[] colors={0xFF91A5A5,0xFF708D93,0xFF496B79,0xFF274C60,0xFF123244};
+            p.setColor(colors[layer]); canvas.drawPath(path,p);
+        }
+        p.setShader(new LinearGradient(0,0,w*.72f,0,new int[]{0xA8102535,0x00102535},null,Shader.TileMode.CLAMP));
+        canvas.drawRect(0,0,w,h,p);
+        p.setShader(new LinearGradient(0,h*.65f,0,h,new int[]{0x00102030,0xB8091725},null,Shader.TileMode.CLAMP));
+        canvas.drawRect(0,0,w,h,p); p.setShader(null);
+
+        int bw=160,bh=Math.max(1,Math.round(160f*h/w));
+        Bitmap tiny=Bitmap.createScaledBitmap(scene,bw,bh,true);
+        int[] pixels=new int[bw*bh],temp=new int[bw*bh]; tiny.getPixels(pixels,0,bw,0,0,bw,bh);
+        for(int pass=0;pass<3;pass++) {
+            for(int y=0;y<bh;y++)for(int x=0;x<bw;x++) {
+                int red=0,green=0,blue=0,count=0;
+                for(int dy=-2;dy<=2;dy++)for(int dx=-2;dx<=2;dx++) {
+                    int color=pixels[Math.max(0,Math.min(bh-1,y+dy))*bw+Math.max(0,Math.min(bw-1,x+dx))];
+                    red+=Color.red(color);green+=Color.green(color);blue+=Color.blue(color);count++;
+                }
+                temp[y*bw+x]=Color.rgb(red/count,green/count,blue/count);
+            }
+            int[] swap=pixels;pixels=temp;temp=swap;
+        }
+        frostedScene=Bitmap.createBitmap(pixels,bw,bh,Bitmap.Config.ARGB_8888);tiny.recycle();
+    }
+    class GlassBackground extends Drawable {
+        final View host; final boolean focused; final float radius;
+        final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+        final int[] location=new int[2];
+        GlassBackground(View host,boolean focused,float radius) {this.host=host;this.focused=focused;this.radius=dp(radius);}
+        public void draw(Canvas canvas) {
+            Rect b=getBounds(); RectF rect=new RectF(b); Path clip=new Path(); clip.addRoundRect(rect,radius,radius,Path.Direction.CW);
+            canvas.save();canvas.clipPath(clip);
+            host.getLocationOnScreen(location);
+            paint.setShader(null);paint.setAlpha(225);
+            canvas.drawBitmap(frostedScene,null,new RectF(-location[0],-location[1],screenWidth-location[0],screenHeight-location[1]),paint);
+            paint.setAlpha(255);
+            paint.setShader(new LinearGradient(0,b.top,0,b.bottom,new int[]{focused?0x70FFFFFF:0x50FFFFFF,0x18273747,0x40203A47},new float[]{0,.5f,1},Shader.TileMode.CLAMP));
+            canvas.drawRect(rect,paint);
+            paint.setShader(new LinearGradient(b.left,b.top,b.right,b.bottom,new int[]{0x34FFFFFF,0x00FFFFFF,0x20FFFFFF},null,Shader.TileMode.CLAMP));
+            canvas.drawRect(rect,paint);paint.setShader(null);
+            paint.setColor(focused?0x16FFFFFF:0x09071020);canvas.drawRect(rect,paint);
+            canvas.restore();
+            paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(focused?2:1));
+            paint.setShader(new LinearGradient(b.left,b.top,b.right,b.bottom,new int[]{focused?0xFFFFFFFF:0xAFFFFFFF,0x25FFFFFF,0x75FFFFFF},null,Shader.TileMode.CLAMP));
+            rect.inset(dp(1),dp(1));canvas.drawRoundRect(rect,radius,radius,paint);
+            paint.setShader(null);paint.setStyle(Paint.Style.FILL);
+        }
+        public void setAlpha(int alpha) {}
+        public void setColorFilter(ColorFilter filter) {}
+        public int getOpacity() {return PixelFormat.TRANSLUCENT;}
+    }
+    class WeatherGlyph extends View {
+        int code=0; final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        WeatherGlyph(Context c) {super(c);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
         protected void onDraw(Canvas canvas) {
-            float w=getWidth(), h=getHeight();
-            paint.setShader(new LinearGradient(0,0,w,h,new int[]{0xFF071521,0xFF18334B,0xFF102332},null,Shader.TileMode.CLAMP)); canvas.drawRect(0,0,w,h,paint);
-            paint.setShader(new RadialGradient(w*.76f,h*.08f,w*.68f,new int[]{0x806DC9AF,0x00328B95},null,Shader.TileMode.CLAMP)); canvas.drawRect(0,0,w,h,paint);
-            paint.setShader(new RadialGradient(w*.15f,h*.8f,w*.65f,new int[]{0x603C447F,0x0012223A},null,Shader.TileMode.CLAMP)); canvas.drawRect(0,0,w,h,paint);
-            paint.setShader(null);
+            float size=Math.min(getWidth(),getHeight()),cx=size*.43f,cy=size*.42f;
+            if(code<=3) {
+                paint.setColor(0xFFFFE4A3);canvas.drawCircle(cx,cy,size*.19f,paint);
+                paint.setStrokeWidth(size*.026f);paint.setStrokeCap(Paint.Cap.ROUND);
+                for(int i=0;i<8;i++) {
+                    double angle=i*Math.PI/4;
+                    canvas.drawLine(cx+(float)Math.cos(angle)*size*.27f,cy+(float)Math.sin(angle)*size*.27f,
+                        cx+(float)Math.cos(angle)*size*.33f,cy+(float)Math.sin(angle)*size*.33f,paint);
+                }
+            }
+            if(code>0) {
+                paint.setColor(0xFFF0F7FD);
+                canvas.drawCircle(size*.48f,size*.58f,size*.17f,paint);
+                canvas.drawCircle(size*.65f,size*.5f,size*.22f,paint);
+                canvas.drawCircle(size*.81f,size*.61f,size*.14f,paint);
+                canvas.drawRoundRect(new RectF(size*.34f,size*.58f,size*.94f,size*.75f),size*.08f,size*.08f,paint);
+                if(code>=51) {
+                    paint.setColor(0xFFB3E7FF);paint.setStrokeWidth(size*.035f);
+                    for(int i=0;i<3;i++)canvas.drawLine(size*(.48f+i*.14f),size*.83f,size*(.44f+i*.14f),size*.93f,paint);
+                }
+            }
         }
     }
 }
-
