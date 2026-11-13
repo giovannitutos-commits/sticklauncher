@@ -31,7 +31,7 @@ jobs:
         run: gradle -p aurora-tvos --no-daemon assembleDebug lintDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: AuroraTV-APK
+          name: AuroraTV-Glass-APK
           path: aurora-tvos/app/build/outputs/apk/debug/app-debug.apk
 
   visual:
@@ -46,7 +46,7 @@ jobs:
           java-version: '17'
       - uses: actions/download-artifact@v4
         with:
-          name: AuroraTV-APK
+          name: AuroraTV-Glass-APK
           path: apk
       - name: Preparar aceleracao do emulador
         run: |
@@ -67,5 +67,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: AuroraTV-Preview
+          name: AuroraTV-Glass-Preview
           path: preview/

@@ -1,4 +1,4 @@
-package br.com.stocco.auroratv;
+package br.com.stocco.auroratv.glass;
 
 import android.app.*;
 import android.content.*;

@@ -3,14 +3,14 @@ set -euo pipefail
 mkdir -p preview
 adb install -r apk/app-debug.apk
 adb logcat -c
-adb shell am start -W -n br.com.stocco.auroratv/.MainActivity
+adb shell am start -W -n br.com.stocco.auroratv.glass/.MainActivity
 sleep 4
-adb shell pidof br.com.stocco.auroratv
+adb shell pidof br.com.stocco.auroratv.glass
 adb exec-out screencap -p > preview/01-inicio.png
 adb shell input keyevent KEYCODE_DPAD_DOWN
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 sleep 1
-adb shell pidof br.com.stocco.auroratv
+adb shell pidof br.com.stocco.auroratv.glass
 adb exec-out screencap -p > preview/02-dock.png
 adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
 sleep 1
