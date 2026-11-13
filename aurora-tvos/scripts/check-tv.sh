@@ -15,6 +15,9 @@ adb exec-out screencap -p > preview/02-dock.png
 adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
 sleep 1
 adb exec-out screencap -p > preview/03-menu.png
+adb shell uiautomator dump /sdcard/aurora-window.xml
+adb pull /sdcard/aurora-window.xml preview/menu.xml
+grep -Eq 'Mover para a esquerda|Adicionar ao dock' preview/menu.xml
 adb logcat -d > preview/logcat.txt
 if grep -q 'FATAL EXCEPTION' preview/logcat.txt; then
   echo "Falha detectada no logcat"; exit 1

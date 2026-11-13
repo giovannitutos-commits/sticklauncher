@@ -246,6 +246,9 @@ public class MainActivity extends Activity {
             if(code!=KeyEvent.KEYCODE_DPAD_CENTER && code!=KeyEvent.KEYCODE_ENTER &&
                code!=KeyEvent.KEYCODE_NUMPAD_ENTER && code!=KeyEvent.KEYCODE_BUTTON_A) return super.dispatchKeyEvent(event);
             if(event.getAction()==KeyEvent.ACTION_DOWN) {
+                if(holding && event.isLongPress() && !held) {
+                    held=true; ui.removeCallbacks(longPress); performLongClick(); return true;
+                }
                 if(!holding && event.getRepeatCount()==0) {
                     holding=true; held=false; pressedCode=code; setPressed(true); ui.postDelayed(longPress,600);
                 }
